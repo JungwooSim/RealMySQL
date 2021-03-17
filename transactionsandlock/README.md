@@ -119,3 +119,105 @@ InnoDB에서는 대부분 보조 인덱스를 이용한 변경 작업은 이어�
 레코드 락과 갭 락을 합쳐 놓은 형태의 잠금을 넥스트 키 락이라 한다.
 
 InnoDB의 갭 락이나 넥스트 키 락은 바이너리 로그에 기록되는 쿼리가 슬레이브에서 실행될 때 마스터에서 만들어낸 결과와 동일한 결과를 만들어내도록 보장해주는 것이 목적이다.
+
+**자동 증가 락(Auto increment lock)**
+
+MySQL에서는 자동 증가하는 숫자 값을 추출(채번)하기 위해 AUTO_INCREMENT라는 컬럼 속성을 제공한다.
+
+여러 레코드가 INSERT 되는 경우, 저장되는 각 레코드는 중복되지 않고 저장된 순서대로 증가한 일련번호를 가져야 한다.
+
+InnoDB 스토리지 엔진에서는 이를 위해 내부적으로 AUTO_INCREMENT 락이라고 하는 테이블 수준의 잠금을 사용한다.
+
+INSERT와 REPLACE 쿼리 문장과 같이 새로운 레코드를 저장하는 쿼리에만 필요하다.
+
+트랜잭션과 관계없이 INSERT와 REPLACE 문장에서 AUTO_INCREMENT 값을 가져오는 순간만 AUTO_INCREMENT 락이 걸렸다가 즉시 해제된다.
+
+테이블에서 단 하나만 존재하기 때문에 두 개의 INSERT 쿼리가 동시에 실행되는 경우 하나의 쿼리가 AUTO_INCREMENT 락을 걸게되면 나머지 쿼리는 AUTO_INCREMENT 락을 기다려야 한다.
+
+### 4.4.3 인덱스와 잠금
+
+InnoDB의 잠금은 레코드를 잠그는 것이 아니라 인덱스를 잠그는 방식으로 처리된다.
+
+즉, 변경해야 할 레코드를 찾기 위해 **검색한 인덱스의 레코드를 모두 잠가야 한다**.
+
+적절히 인덱스가 준비돼 있지 않다면 각 클라이언트 간의 동시성이 상당히 떨어질 수 있다.
+
+### 4.4.4 트랜잭션 격리 수준과 잠금
+
+불필요한 레코드의 잠금 현상은 InnoDB의 넥스트 키 락 때문에 발생하는 것이다.
+
+InnoDB에서 넥스트 키 락을 필요하게 만드는 주 원인은 복제를 위한 바이너리 로그 때문이다.
+
+아직 많이 사용되지는 않지만 레코드 기반의 바이너리 로그(Row based binary log)를 사용하거나 바이너리 로그를 사용하지 않는 경우에는 InnoDB의 갭 락이나 넥스트 키 락의 사용을 대폭 줄일 수 있다.
+
+InnoDB의 갭 락이나 넥스트 키 락을 줄일 수 있다는 것은 사용자의 쿼리 요청을 동시에 더 많이 처리할 수 있음을 의미한다.
+
+### 4.4.5 레코드 수준의 잠금 확인 및 해제
+
+레코드 잠금과 잠금 대기에 대한 조회가 가능하므로 쿼리 하나만 실행해 보면 잠금과 잠금 대기를 바로 확인 가능하다.
+
+## 4.5 MySQL의 격리 수준
+
+트랜잭션의 격리 수준(isolation level)이란 동시에 여러 트랜잭션이 처리될 때, 특정 트랜잭션이 다른 트랜잭션에서 변경하거나 조회하는 데이터를 볼 수 있도록 허용할지 말지를 결정하는 것이다.
+
+"READ UNCOMMITTED", "READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE" 로 4가지로 나뉜다.
+
+"DIRTY READ" 라고도 하는 "READ UNCOMMITTED"는 일반적인 데이터베이스에서 거의 사용하지 않는다.
+
+"SERIALIZABLE" 또한 동시성이 중요한 데이터베이스에서는 거의 사용하지 않는다.
+
+격리 수준이 높아질 수록 MySQL 서버의 처리 성능이 많이 떨어질 것으로 생각하는 사용자가 많다. 하지만 사실 "SERIALIZABLE" 격리 수준이 아니라면 크게 성능의 개선이나 저하는 발생하지 않는다.
+
+### 4.5.1 READ UNCOMMITTED
+
+각 트랜잭션에서의 변경 내용이 COMMIT이나 ROLLBACK 여부에 상관 없이 다른 트랜잭션에서 보여진다.
+
+어떤 트랜잭션에서 처리한 작업이 완료되지 않았는데도 다른 트랜잭션에서 볼 수 있게 되는 현상을 "DIRITY READ"라 하고, "DIRITY READ"가 허용되는 격리 수준이 "READ UNCOMMITTED" 이다.
+
+### 4.5.2 READ COMMITTED
+
+보통 온라인 서비스에서 가장 많이 사용하는 격리수준이다.
+
+"DIRTY READ"와 같은 현상은 발생하지 않는다.
+
+어떤 트랜잭션에서 데이터를 변경했더라도 COMMIT이 완료된 데이터만 다른 트랜잭션에서 조회할 수 있기 때문이다.(Undo 에서 백업한걸 보여주다가 COMMIT 되면 변경된것을 보여줌)
+
+"NON-REPEATABLE READ"라는 부정합 문제가 있다.
+
+<img src="/transactionsandlock/img/img-2.png" width="500px;" />
+
+1. 그림 4.6에서 처음 사용자 B가 BEGIN 명령으로 트랜잭션을 시작하고 first_name이 'Toto%'인 사용자를 검색했는데, 일치하는 사람이 없다.
+2. 사용자 A가 사원번호 500000인 사원의 이름을 'Toto'로 변경하고 커밋을 실행한 이후
+3. 사용자 B가 다시 1번의 SELECT 쿼리로 조회하면 결과가 1건 나온다.
+
+사용자 B가 하나의 트랜잭션 내에서 똑같은 SELECT 쿼리를 실행했을 때 항상 같은 결과를 가져와야 되는 "REPEATABLE READ" 정합성에 어긋나는 것이다.
+
+### 4.5.3 REPEATABLE READ
+
+MySQL의 InnoDB 스토리 엔진에서 기본적으로 사용되는 격리 수준이다.
+
+바이너리 로그를 가진 MySQL의 장비에서는 최소 REPEATABLE READ 격리 수준 이상을 사용해야 한다.
+
+"NON-REPEATABLE READ"라는 부정합 문제가 발생하지 않는다.
+
+InnoDB 스토리지 엔진은 트랜잭션이 ROLLBACK 될 가능성을 대비해 변경되기 전 레코드를 언두(Undo) 공간에 백업해두고 실제 레코드 값을 변경한다.
+
+이러한 변경 방식을 MVVC(Multi Version Concurrency Control)이라 한다.
+
+Undo 영역에 백업된 데이터는 InnoDB 스토리지 엔진이 불필요하다고 판단하는 시점에 주기적으로 삭제한다.
+
+REPETABLE READ 격리 수준에서는 MVCC를 보장하기 위해 실행 중인 트랜잭션 가운데 가장 오래된 트랜잭션 번호보다 앞선  Undo 영역의 데이터는 삭제할 수가 없다.
+
+<img src="/transactionsandlock/img/img-3.png" width="500px;" />
+
+하지만 REPERTABLE READ 격리 수준에서도 아래와 같은 부정합이 발생 할 수 있다.
+
+<img src="/transactionsandlock/img/img-4.png" width="500px;" />
+
+위 4-8 그림은 사용자 A가 employees 테이블에 INSERT를 실행하는 도중에 사용자 B가 SELECT .. FOR UPDATE 쿼리로 employees 테이블을 조회했을 때 어떤 결과를 보여주는지 알 수 있다.
+
+위와 같이 다른 트랜잭션에서 수행한 변경 작업에 의해 레코드가 보였다가 안보였다가 하는 현상을 PHANTOM READ(또는 PHANTOM ROW)라고 한다.
+
+SELECT .. FOR UPDATE 쿼리는 SELECT 하는 레코드에 쓰기 잠금을 걸어야 하는데, Undo 레코드에는 잠금을 걸 수 없다.
+
+즉, SELECT .. FOR UPDATE 나 SELECT .. LOCK IN SHARE MODE 로 조회되는 레코드는 Undo 영역의 변경 전 데이터를 가져오는 것이 아니라 실제 데이터를 가져오게 되는 것이다.
