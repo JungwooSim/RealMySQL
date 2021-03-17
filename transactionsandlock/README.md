@@ -221,3 +221,19 @@ REPETABLE READ 격리 수준에서는 MVCC를 보장하기 위해 실행 중인 
 SELECT .. FOR UPDATE 쿼리는 SELECT 하는 레코드에 쓰기 잠금을 걸어야 하는데, Undo 레코드에는 잠금을 걸 수 없다.
 
 즉, SELECT .. FOR UPDATE 나 SELECT .. LOCK IN SHARE MODE 로 조회되는 레코드는 Undo 영역의 변경 전 데이터를 가져오는 것이 아니라 실제 데이터를 가져오게 되는 것이다.
+
+### 4.5.4 SERIALIZABLE
+
+가장 단순하지만 가장 엄격한 격리 수준이다. 동시 처리 성능도 다른 트랜잭션 격리 수준보다 떨어진다.
+
+InnoDB 테이블에서 기본적으로 순수한 SELECT 작업(INSERT ...  SELECT ... 또는 CREATE TABLE ... AS SELECT ... 가 아닌)은 아무런 레코드 잠금도 설정하지 않지만 SERIALIZABLE 로 설정되면 읽기 작업도 공유 잠금(읽기 잠금)을 획득해야만 하며, 동시에 다른 트랜잭션은 그러한 레코드를 변경하지 못하게 된다.
+
+즉, 한 트랜잭션에서 읽고 쓰는 레코드를 다른 트랜잭션에서는 절대 접근할 수 없는 것이다.
+
+### 4.5.5 REPEATABLE READ 격리 수준과 READ COMMITTED 격리 수준의 성능 비교
+
+성능 차이는 크지 않다.
+
+벤치마크 결과로는 1GB와 30GB 크기의 테이블에서는 REPEATABLE READ 2% 정도 높은 성능을 보였고, 100GB 크기의 테이블에서는 READ COMMITTED가 7% 정도 높은 성능을 보이는 정도 였다.
+
+<img src="/transactionsandlock/img/img-5.png" width="500px;" />
