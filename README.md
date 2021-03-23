@@ -30,3 +30,4 @@ MySQL 서버는 기동하면서 설정 파일의 내용을 읽어 메모리나 �
 #### 03. 아키텍처(<a href="https://github.com/JungwooSim/RealMySQL/tree/main/architecture" target="_blank">링크</a>)
 #### 04. 트랜잭션과 잠금(<a href="https://github.com/JungwooSim/RealMySQL/tree/main/transactionsandlock" target="_blank">링크</a>)
 #### 05. 인덱스(<a href="https://github.com/JungwooSim/RealMySQL/tree/main/index" target="_blank">링크</a>)
+#### 10. 파티션(<a href="https://github.com/JungwooSim/RealMySQL/tree/main/partition" target="_blank">링크</a>)
