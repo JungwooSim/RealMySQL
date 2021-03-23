@@ -150,3 +150,47 @@ MySQL의 파티션에서 인덱스는 로컬이나 글로벌의 의미가 없이
 즉, 파티션 단위로 인덱스를 변경하거나 추가할 수 없다.<br>
 또한 하나의 테이블에 소속된 파티션은 다른 종류의 스토리지 엔진으로 구성하는 것을 추천하지 않는다.<br>
 위의 제약사항을 고려해 보면 MySQL 5.1에서는 INTEGER 칼럼과 DATE(또는 DATETIME) 타입의 칼럼으로 파티션된 테이블만 제대로 된 기능(파티션 생성 및 파티션 프루닝)을 활용할 수 있을 것으로 보인다.<br>
+
+### 10.2.2 파티션 사용 시 주의사항
+
+**파티션과 유니크 키(프라이머리 키 포함)**
+
+종류에 관계없이 테이블에 유니크 인덱스(프라이머리 키 포함)가 있으면 파티션 키는 모든 유니크 인덱스의 일부 또는 모든 칼럼을 포함해야 한다.<br>
+파티션 키로 사용할 수 있는 예제를 보자.<br>
+
+```sql
+CREATE TABLE tb_partition (
+	fd1 INT NOT NULL, fd2 INT NOT NULL, fd3 INT NOT NULL,
+	UNIQUE KEY (fd1, fd2, fd3)
+) PARTITION BY HASH (fd1)
+PARTITION 4;
+
+CREATE TABLE tb_partition (
+	fd1 INT NOT NULL, fd2 INT NOT NULL, fd3 INT NOT NULL,
+	UNIQUE KEY (fd1, fd2)
+) PARTITION BY HASH (fd1 + fd2)
+PARTITION 4;
+
+CREATE TABLE tb_partition (
+	fd1 INT NOT NULL, fd2 INT NOT NULL, fd3 INT NOT NULL,
+	UNIQUE KEY (fd1, fd2, fd3)
+	UNIQUE KEY (fd3)
+) PARTITION BY HASH (fd3)
+PARTITION 4;
+```
+
+위의 예제 3개는 각 유니크 키를 구성하는 칼럼의 값이 결정되면 해당 레코드가 어느 파티션에 저장돼 있는지 계산할 수 있다는 사실을 알 수 있다.<br>
+모두 해시 파티션으로 예를 들었지만 이는 파티션 방식에 관계없이 모든 파티션 테이블에서 프라이머리 키나 유니크 키를 생성하기 위해 지켜야 할 요건이다.<br>
+
+**파티션과 open_files_limit 파라미터**
+
+MySQL에서는 일반적으로 테이블을 파일 단위로 관리하기 때문에 MySQL 서버에서 동시에 오픈된 파일의 개수가 상당히 많아 질 수 있다.<br>
+이를 제한하기 위해 open-files-limit 시스템 변수에 동시에 오픈할 수 있는 적절한 파일의 개수를 설정할 수 있다.<br>
+파티션 되지 않은 일반 테이블은 테이블 1개당 오픈된 파일의 개수가 2~3개 수준이지만 파티션 테이블에서는 (파티션의 개수 * 2~3)개가 된다.<br>
+파티션을 많이 사용하는 경우에는 open-files-limit를 적절히 높은 값으로 다시 설정해 줄 필요가 있다.<br>
+
+**파티션 테이블과 잠금**
+
+파티션 테이블에 쿼리가 실행되면 MySQL 서버는 테이블의 파티션 개수에 관계없이 모든 파티션을 열고 잠금을 걸게 된다.<br>
+이는 테이블의 파티션 개수가 많아지면 많아질수록 더 느려지게 되므로 적정 수준의 파티션이 있는 테이블에서는 오히려 더 느려지는 현상이 발생하는 것이다.<br>
+파티션이 많이 포함된 테이블에 한 번에 많은 레코드를 INSERT 하거나 UPDATE 한다면 LOCK TABLS 명령으로 테이블을 잠그고 INSERT 나 UPDATE를 수행하면 조금은 더 빠르게 처리할 수 있다.<br>
